@@ -52,8 +52,7 @@ CSV export for LGU blasts, and a one-screen UI.
 
 ```bash
 # 1) create & activate virtual env (PowerShell)
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.\.venv\Scripts\python.exe -m uvicorn api.app:app --reload
 
 # 2) install deps
 python -m pip install -r requirements.txt

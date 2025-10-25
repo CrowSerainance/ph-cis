@@ -66,5 +66,6 @@ python -m uvicorn api.app:app --reload
 
 # 5) run UI (new terminal, from repo root)
 # optional but recommended:
-$env:PYTHONPATH = "$PWD"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+.\.venv\Scripts\Activate.ps1
 streamlit run ui/app.py

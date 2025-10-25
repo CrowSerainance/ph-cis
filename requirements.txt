@@ -1,0 +1,9 @@
+pandas
+numpy
+pydantic
+fastapi
+uvicorn
+requests
+python-dateutil
+streamlit
+pytest

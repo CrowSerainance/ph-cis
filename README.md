@@ -69,3 +69,8 @@ python -m uvicorn api.app:app --reload
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
 .\.venv\Scripts\Activate.ps1
 streamlit run ui/app.py
+
+# 6) Access the information of the website below:
+ API direct site: http://127.0.0.1:8000/advisory?province=Nueva%20Ecija&crop=rice&stage=nursery
+ UI Link: http://localhost:8501
+

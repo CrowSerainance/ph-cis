@@ -36,10 +36,6 @@ CSV export for LGU blasts, and a one-screen UI.
 **UI**
 ![UI](docs/img/ui_page.png)
 
-> Put screenshots here:
-> - `docs/img/api_json.png` – the `/advisory` JSON like your browser screenshot  
-> - `docs/img/ui_page.png` – Streamlit page with metrics/advisory
-
 ---
 
 ## Features

@@ -1,5 +1,4 @@
-﻿@"
-# Methods & Assumptions (v0.1)
+﻿# Methods & Assumptions (v0.1)
 
 **Scope:** Pilot coverage for Nueva Ecija and Isabela. Crops: **rice** and **corn**.
 
@@ -26,8 +25,9 @@
 
 ## Outputs
 - **API:** `/advisory`, `/advisory_bulk`, `/export/csv` with `lang=en|tl`.
-- **UI:** Streamlit single page consuming the API.
-- **CSV:** One row per province for LGU/SMS workflows.
+- **UI:** Streamlit single page consuming the API with a language selector and optional CSV download.
+- **Bulk:** By default, `/advisory_bulk` and `/export/csv` return all configured province/crop/stage combinations; callers can request explicit province/crop/stage combinations.
+- **CSV:** One row per advisory with province, crop, stage, weekly rainfall, heat-days, dry-spell flag, advisory text, SMS text, and date coverage for LGU/SMS workflows.
 
 ## Limitations
 - Province-level aggregation hides local variability.
@@ -39,4 +39,3 @@
 - Back-test last 4–8 weeks for pilot provinces.
 - Rapid feedback from municipal ag offices on clarity/usefulness.
 - Adjust thresholds per crop stage and season.
-"@ | Set-Content docs\methods.md -Encoding utf8

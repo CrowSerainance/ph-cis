@@ -71,6 +71,15 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
 streamlit run ui/app.py
 
 # 6) Access the information of the website below:
- API direct site: http://127.0.0.1:8000/advisory?province=Nueva%20Ecija&crop=rice&stage=nursery
+ API direct site: http://127.0.0.1:8000/advisory?province=Nueva%20Ecija&crop=rice&stage=nursery&lang=tl
  UI Link: http://localhost:8501
 
+```
+
+## API
+
+- `GET /advisory?province=Nueva%20Ecija&crop=rice&stage=nursery&lang=en` returns one advisory. Use `lang=en` for English or `lang=tl` for Tagalog.
+- `GET /advisory_bulk?lang=tl` returns all configured province/crop/stage advisories.
+- `GET /advisory_bulk` also accepts repeated `province`, `crop`, and `stage` query parameters for requested combinations.
+- `POST /advisory_bulk?lang=en` accepts a JSON body like `{"combinations":[{"province":"Nueva Ecija","crop":"corn","stage":"vegetative"}]}`.
+- `GET /export/csv?province=Nueva%20Ecija&crop=rice&stage=nursery&lang=en` downloads CSV columns for province, crop, stage, metrics, advisory, SMS, and date coverage.

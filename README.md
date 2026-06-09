@@ -57,7 +57,7 @@ CSV export for LGU blasts, and a one-screen UI.
 # 2) install deps
 python -m pip install -r requirements.txt
 
-# 3) fetch 7-day forecast for pilot provinces
+# 3) fetch 7-day forecast for pilot provinces (required before /advisory works)
 python -m etl.fetch
 
 # 4) run API
@@ -78,7 +78,8 @@ streamlit run ui/app.py
 
 ## API
 
-- `GET /advisory?province=Nueva%20Ecija&crop=rice&stage=nursery&lang=en` returns one advisory. Use `lang=en` for English or `lang=tl` for Tagalog.
+- `GET /health` reports whether each province forecast cache exists and contains required daily forecast keys.
+- `GET /advisory?province=Nueva%20Ecija&crop=rice&stage=nursery&lang=en` returns one advisory. Run `python -m etl.fetch` first so the required forecast cache exists. Use `lang=en` for English or `lang=tl` for Tagalog.
 - `GET /advisory_bulk?lang=tl` returns all configured province/crop/stage advisories.
 - `GET /advisory_bulk` also accepts repeated `province`, `crop`, and `stage` query parameters for requested combinations.
 - `POST /advisory_bulk?lang=en` accepts a JSON body like `{"combinations":[{"province":"Nueva Ecija","crop":"corn","stage":"vegetative"}]}`.

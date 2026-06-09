@@ -13,6 +13,8 @@ from core.rules import SUPPORTED_LANGUAGES, advisory_text, sms_line
 
 app = FastAPI(title="PH CIS API")
 DATA_DIR = pathlib.Path("data")
+FORECAST_UNAVAILABLE_DETAIL = "forecast cache missing or stale; run python -m etl.fetch"
+REQUIRED_FORECAST_KEYS = ("time", "precipitation_sum", "temperature_2m_max")
 Lang = Literal["en", "tl"]
 
 
@@ -40,9 +42,50 @@ class AdvisoryBulkRequest(BaseModel):
 
 def _load(prov_key):
     p = DATA_DIR / f"{prov_key}.json"
-    if not p.exists():
-        raise HTTPException(404, f"forecast data not found for {prov_key}; run python -m etl.fetch")
-    return json.loads(p.read_text())
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def _missing_forecast_keys(daily) -> list[str]:
+    if not isinstance(daily, dict):
+        return list(REQUIRED_FORECAST_KEYS)
+    return [key for key in REQUIRED_FORECAST_KEYS if key not in daily]
+
+
+def _load_daily_forecast(prov_key: str):
+    try:
+        daily = _load(prov_key)
+        missing = _missing_forecast_keys(daily)
+        if missing:
+            raise KeyError(", ".join(missing))
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as exc:
+        raise HTTPException(
+            status_code=503, detail=FORECAST_UNAVAILABLE_DETAIL
+        ) from exc
+    return daily
+
+
+def _province_health(prov_key: str) -> dict:
+    path = DATA_DIR / f"{prov_key}.json"
+    status = {
+        "province": PROVINCES[prov_key]["name"],
+        "file": str(path),
+        "exists": path.exists(),
+        "valid_json": False,
+        "has_required_keys": False,
+        "missing_keys": list(REQUIRED_FORECAST_KEYS),
+    }
+    if not status["exists"]:
+        return status
+    try:
+        daily = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return status
+
+    status["valid_json"] = True
+    missing = _missing_forecast_keys(daily)
+    status["missing_keys"] = missing
+    status["has_required_keys"] = not missing
+    return status
 
 
 def _province_key(province: str) -> str:
@@ -64,19 +107,25 @@ def _validate_lang(lang: str) -> None:
         raise HTTPException(400, "unsupported lang; use en or tl")
 
 
-def _build_advisory(province: str, crop: str, stage: str, lang: Lang = "en") -> AdvisoryOut:
+def _build_advisory(
+    province: str, crop: str, stage: str, lang: Lang = "en"
+) -> AdvisoryOut:
     _validate_lang(lang)
     prov_key = _province_key(province)
     _validate_crop_stage(crop, stage)
 
-    daily = _load(prov_key)
+    daily = _load_daily_forecast(prov_key)
     rain = daily["precipitation_sum"]
     tmax = daily["temperature_2m_max"]
     dates = daily["time"]
 
     wr = weekly_rain_mm(rain)
     hd = heat_days(tmax, CROPS[crop]["thresholds"]["heat_day_tmax"])
-    ds = bool(dryspell_count(rain, dry_thresh=1.0, spell_len=CROPS[crop]["thresholds"]["dryspell_days"]))
+    ds = bool(
+        dryspell_count(
+            rain, dry_thresh=1.0, spell_len=CROPS[crop]["thresholds"]["dryspell_days"]
+        )
+    )
 
     text = advisory_text(crop, stage, wr, ds, hd, lang=lang)
     sms = sms_line(PROVINCES[prov_key]["name"], crop, stage, wr, ds, hd, lang=lang)
@@ -113,7 +162,9 @@ def _query_combinations(
     if not province or not crop or not stage:
         raise HTTPException(400, "province, crop, and stage must be supplied together")
     if not (len(province) == len(crop) == len(stage)):
-        raise HTTPException(400, "province, crop, and stage lists must have the same length")
+        raise HTTPException(
+            400, "province, crop, and stage lists must have the same length"
+        )
     return [
         AdvisoryCombination(province=prov, crop=crp, stage=stg)
         for prov, crp, stg in zip(province, crop, stage)
@@ -147,6 +198,16 @@ def _rows_to_csv(rows: list[AdvisoryOut]) -> str:
     return buf.getvalue()
 
 
+@app.get("/health")
+def health():
+    provinces = {prov_key: _province_health(prov_key) for prov_key in PROVINCES}
+    return {
+        "ok": all(item["has_required_keys"] for item in provinces.values()),
+        "required_keys": list(REQUIRED_FORECAST_KEYS),
+        "provinces": provinces,
+    }
+
+
 @app.get("/advisory", response_model=AdvisoryOut)
 def advisory(province: str, crop: str, stage: str, lang: Lang = "en"):
     return _build_advisory(province, crop, stage, lang)
@@ -160,12 +221,18 @@ def advisory_bulk(
     lang: Lang = "en",
 ):
     combinations = _query_combinations(province, crop, stage)
-    return [_build_advisory(item.province, item.crop, item.stage, lang) for item in combinations]
+    return [
+        _build_advisory(item.province, item.crop, item.stage, lang)
+        for item in combinations
+    ]
 
 
 @app.post("/advisory_bulk", response_model=list[AdvisoryOut])
 def advisory_bulk_post(payload: AdvisoryBulkRequest, lang: Lang = "en"):
-    return [_build_advisory(item.province, item.crop, item.stage, lang) for item in payload.combinations]
+    return [
+        _build_advisory(item.province, item.crop, item.stage, lang)
+        for item in payload.combinations
+    ]
 
 
 @app.get("/export/csv")
@@ -176,7 +243,10 @@ def export_csv(
     lang: Lang = "en",
 ):
     combinations = _query_combinations(province, crop, stage)
-    rows = [_build_advisory(item.province, item.crop, item.stage, lang) for item in combinations]
+    rows = [
+        _build_advisory(item.province, item.crop, item.stage, lang)
+        for item in combinations
+    ]
     return Response(
         content=_rows_to_csv(rows),
         media_type="text/csv",

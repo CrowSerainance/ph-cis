@@ -1,7 +1,6 @@
 import csv
 import io
 import json
-import pathlib
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -9,10 +8,10 @@ from pydantic import BaseModel
 
 from core.config import CROPS, PROVINCES
 from core.metrics import dryspell_count, heat_days, weekly_rain_mm
+from core.paths import DATA_DIR
 from core.rules import SUPPORTED_LANGUAGES, advisory_text, sms_line
 
 app = FastAPI(title="PH CIS API")
-DATA_DIR = pathlib.Path("data")
 FORECAST_UNAVAILABLE_DETAIL = "forecast cache missing or stale; run python -m etl.fetch"
 REQUIRED_FORECAST_KEYS = ("time", "precipitation_sum", "temperature_2m_max")
 Lang = Literal["en", "tl"]

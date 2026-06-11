@@ -1,7 +1,8 @@
-import json, pathlib, requests, datetime as dt
+import json, requests, datetime as dt
 from core.config import PROVINCES
+from core.paths import DATA_DIR
 
-DATA_DIR = pathlib.Path("data"); DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True)
 
 def fetch_7day(lat, lon):
     # Daily precip & max temp for next 7 days

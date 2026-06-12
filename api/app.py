@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import re
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -87,18 +88,67 @@ def _province_health(prov_key: str) -> dict:
     return status
 
 
+def _slug(value: str) -> str:
+    return re.sub(r"[\s_]+", "_", value.strip().lower().replace("-", "_")).strip(
+        "_"
+    )
+
+
+def _accepted_provinces() -> list[str]:
+    return [meta["name"] for meta in PROVINCES.values()]
+
+
 def _province_key(province: str) -> str:
-    prov_key = province.lower().replace(" ", "_")
+    prov_key = _slug(province)
     if prov_key not in PROVINCES:
-        raise HTTPException(400, "unknown province")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "unknown province",
+                "received": province,
+                "normalized": prov_key,
+                "accepted_provinces": _accepted_provinces(),
+                "accepted_values": list(PROVINCES),
+            },
+        )
     return prov_key
 
 
-def _validate_crop_stage(crop: str, stage: str) -> None:
-    if crop not in CROPS:
-        raise HTTPException(400, "unknown crop")
-    if stage not in CROPS[crop]["stages"]:
-        raise HTTPException(400, "unknown stage")
+def _crop_key(crop: str) -> str:
+    crop_key = _slug(crop)
+    if crop_key not in CROPS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "unknown crop",
+                "received": crop,
+                "normalized": crop_key,
+                "accepted_crops": list(CROPS),
+            },
+        )
+    return crop_key
+
+
+def _stage_key(crop: str, stage: str) -> str:
+    stage_key = _slug(stage)
+    accepted_stages = CROPS[crop]["stages"]
+    if stage_key not in accepted_stages:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "unknown stage",
+                "received": stage,
+                "normalized": stage_key,
+                "crop": crop,
+                "accepted_stages": accepted_stages,
+            },
+        )
+    return stage_key
+
+
+def _validate_crop_stage(crop: str, stage: str) -> tuple[str, str]:
+    crop_key = _crop_key(crop)
+    return crop_key, _stage_key(crop_key, stage)
 
 
 def _validate_lang(lang: str) -> None:
@@ -111,7 +161,7 @@ def _build_advisory(
 ) -> AdvisoryOut:
     _validate_lang(lang)
     prov_key = _province_key(province)
-    _validate_crop_stage(crop, stage)
+    crop_key, stage_key = _validate_crop_stage(crop, stage)
 
     daily = _load_daily_forecast(prov_key)
     rain = daily["precipitation_sum"]
@@ -119,20 +169,24 @@ def _build_advisory(
     dates = daily["time"]
 
     wr = weekly_rain_mm(rain)
-    hd = heat_days(tmax, CROPS[crop]["thresholds"]["heat_day_tmax"])
+    hd = heat_days(tmax, CROPS[crop_key]["thresholds"]["heat_day_tmax"])
     ds = bool(
         dryspell_count(
-            rain, dry_thresh=1.0, spell_len=CROPS[crop]["thresholds"]["dryspell_days"]
+            rain,
+            dry_thresh=1.0,
+            spell_len=CROPS[crop_key]["thresholds"]["dryspell_days"],
         )
     )
 
-    text = advisory_text(crop, stage, wr, ds, hd, lang=lang)
-    sms = sms_line(PROVINCES[prov_key]["name"], crop, stage, wr, ds, hd, lang=lang)
+    text = advisory_text(crop_key, stage_key, wr, ds, hd, lang=lang)
+    sms = sms_line(
+        PROVINCES[prov_key]["name"], crop_key, stage_key, wr, ds, hd, lang=lang
+    )
 
     return AdvisoryOut(
         province=PROVINCES[prov_key]["name"],
-        crop=crop,
-        stage=stage,
+        crop=crop_key,
+        stage=stage_key,
         weekly_rain_mm=wr,
         heat_days=hd,
         dryspell_flag=ds,

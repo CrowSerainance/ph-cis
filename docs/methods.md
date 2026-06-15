@@ -1,4 +1,4 @@
-﻿# Methods & Assumptions (v0.1)
+# Methods & Assumptions (v0.1)
 
 **Scope:** Pilot coverage for Nueva Ecija and Isabela. Crops: **rice** and **corn**.
 

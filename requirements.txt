@@ -7,3 +7,5 @@ requests
 python-dateutil
 streamlit
 pytest
+
+httpx

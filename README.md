@@ -76,6 +76,14 @@ streamlit run ui/app.py
 
 ```
 
+## Testing
+
+Run the deterministic unit and API test suite from the repository root:
+
+```bash
+python -m pytest
+```
+
 ## API
 
 - `GET /health` reports whether each province forecast cache exists and contains required daily forecast keys.

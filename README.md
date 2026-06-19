@@ -76,6 +76,23 @@ streamlit run ui/app.py
 
 ```
 
+
+## UI
+
+The Streamlit UI calls the FastAPI service at `http://127.0.0.1:8000` by default. To target a different API deployment, set `PH_CIS_API_URL` in your Streamlit secrets or environment before launching the UI, or edit the **API base URL** field in the sidebar at runtime.
+
+Examples:
+
+```bash
+# Environment variable
+PH_CIS_API_URL=https://api.example.com streamlit run ui/app.py
+```
+
+```toml
+# .streamlit/secrets.toml
+PH_CIS_API_URL = "https://api.example.com"
+```
+
 ## Testing
 
 Run the deterministic unit and API test suite from the repository root:

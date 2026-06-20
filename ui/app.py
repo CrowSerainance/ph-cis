@@ -3,6 +3,7 @@ import sys, pathlib
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 # ------------------------------------------------------
 
+import datetime as dt
 import os
 
 import requests
@@ -11,6 +12,56 @@ from core.config import CROPS, PROVINCES
 
 DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
 LANGUAGES = {"English": "en", "Tagalog": "tl"}
+CACHE_STALE_AFTER = dt.timedelta(hours=24)
+
+
+def parse_utc_timestamp(value: str | None) -> dt.datetime | None:
+    """Parse API refresh timestamps as timezone-aware UTC datetimes."""
+    if not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def show_refresh_metadata(metadata: dict) -> None:
+    """Display cache freshness details and warn when the forecast is stale."""
+    refreshed_at = parse_utc_timestamp(metadata.get("last_refresh_utc"))
+    source = (
+        metadata.get("source_provider")
+        or metadata.get("source_url")
+        or "unknown source"
+    )
+    provinces = (
+        metadata.get("provinces_refreshed")
+        or metadata.get("province_keys_refreshed")
+        or []
+    )
+
+    st.caption(f"Forecast source: {source}")
+    if provinces:
+        st.caption(f"Forecast provinces refreshed: {', '.join(provinces)}")
+
+    if refreshed_at is None:
+        st.warning(
+            "Forecast refresh time is unavailable; cache freshness cannot be verified."
+        )
+        return
+
+    age = dt.datetime.now(dt.timezone.utc) - refreshed_at
+    st.caption(
+        f"Forecast last refreshed: {refreshed_at.isoformat()} "
+        f"({age.total_seconds() / 3600:.1f} hours ago)"
+    )
+    if age > CACHE_STALE_AFTER:
+        st.warning(
+            "Forecast cache is older than 24 hours. Run `python -m etl.fetch` "
+            "to refresh before using advisories operationally."
+        )
 
 
 def configured_api_base_url() -> str:
@@ -34,7 +85,10 @@ def get_api(path: str, params: dict[str, str], base_url: str) -> requests.Respon
     try:
         response = requests.get(url, params=params, timeout=20)
     except requests.exceptions.ConnectionError:
-        st.error(f"Cannot connect to the API at {base_url}. Check that the API is running and the URL is correct.")
+        st.error(
+            f"Cannot connect to the API at {base_url}. "
+            "Check that the API is running and the URL is correct."
+        )
         return None
     except requests.exceptions.RequestException as exc:
         st.error(f"API request failed: {exc}")
@@ -67,6 +121,7 @@ r = get_api("/advisory", q, api_base_url)
 if r is not None:
     js = r.json()
     st.subheader("Weekly Summary")
+    show_refresh_metadata(js.get("refresh_metadata", {}))
     st.write(js["advisory"])
     st.metric("7-day rain (mm)", js["weekly_rain_mm"])
     st.metric("Heat days (≥35°C)", js["heat_days"])

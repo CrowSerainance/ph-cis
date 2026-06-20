@@ -5,17 +5,25 @@ import re
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.config import CROPS, PROVINCES
 from core.metrics import dryspell_count, heat_days, weekly_rain_mm
-from core.paths import DATA_DIR
+from core.paths import DATA_DIR, METADATA_PATH
 from core.rules import SUPPORTED_LANGUAGES, advisory_text, sms_line
 
 app = FastAPI(title="PH CIS API")
 FORECAST_UNAVAILABLE_DETAIL = "forecast cache missing or stale; run python -m etl.fetch"
 REQUIRED_FORECAST_KEYS = ("time", "precipitation_sum", "temperature_2m_max")
 Lang = Literal["en", "tl"]
+
+
+class RefreshMetadata(BaseModel):
+    last_refresh_utc: str | None = None
+    source_provider: str | None = None
+    source_url: str | None = None
+    provinces_refreshed: list[str] = Field(default_factory=list)
+    province_keys_refreshed: list[str] = Field(default_factory=list)
 
 
 class AdvisoryOut(BaseModel):
@@ -28,6 +36,7 @@ class AdvisoryOut(BaseModel):
     advisory: str
     sms: str
     dates: list[str]
+    refresh_metadata: RefreshMetadata
 
 
 class AdvisoryCombination(BaseModel):
@@ -38,6 +47,21 @@ class AdvisoryCombination(BaseModel):
 
 class AdvisoryBulkRequest(BaseModel):
     combinations: list[AdvisoryCombination]
+
+
+def _load_refresh_metadata() -> dict:
+    default = {
+        "last_refresh_utc": None,
+        "source_provider": None,
+        "source_url": None,
+        "provinces_refreshed": [],
+        "province_keys_refreshed": [],
+    }
+    try:
+        metadata = json.loads(METADATA_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return default
+    return {**default, **metadata}
 
 
 def _load(prov_key):
@@ -193,6 +217,7 @@ def _build_advisory(
         advisory=text,
         sms=sms,
         dates=dates,
+        refresh_metadata=RefreshMetadata(**_load_refresh_metadata()),
     )
 
 
@@ -243,6 +268,7 @@ def _rows_to_csv(rows: list[AdvisoryOut]) -> str:
     writer.writeheader()
     for row in rows:
         item = row.dict()
+        item.pop("refresh_metadata", None)
         dates = item.pop("dates")
         item["date_start"] = dates[0] if dates else ""
         item["date_end"] = dates[-1] if dates else ""
@@ -258,6 +284,7 @@ def health():
         "ok": all(item["has_required_keys"] for item in provinces.values()),
         "required_keys": list(REQUIRED_FORECAST_KEYS),
         "provinces": provinces,
+        "refresh_metadata": _load_refresh_metadata(),
     }
 
 

@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 httpx = pytest.importorskip("httpx")
@@ -73,3 +75,49 @@ def test_advisory_validation_rejects_unknown_stage(monkeypatch):
 
     assert response.status_code == 400
     assert response.json()["detail"]["error"] == "unknown stage"
+
+
+def test_health_includes_refresh_metadata(tmp_path, monkeypatch):
+    metadata_path = tmp_path / "metadata.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "last_refresh_utc": "2026-06-20T12:00:00+00:00",
+                "source_provider": "Open-Meteo",
+                "source_url": "https://api.open-meteo.com/v1/forecast",
+                "provinces_refreshed": ["Nueva Ecija"],
+                "province_keys_refreshed": ["nueva_ecija"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_app, "METADATA_PATH", metadata_path)
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    metadata = response.json()["refresh_metadata"]
+    assert metadata["last_refresh_utc"] == "2026-06-20T12:00:00+00:00"
+    assert metadata["source_provider"] == "Open-Meteo"
+    assert metadata["provinces_refreshed"] == ["Nueva Ecija"]
+
+
+def test_advisory_includes_refresh_metadata(tmp_path, monkeypatch):
+    metadata_path = tmp_path / "metadata.json"
+    metadata_path.write_text(
+        json.dumps({"last_refresh_utc": "2026-06-20T12:00:00+00:00"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_app, "_load", lambda prov_key: FORECAST)
+    monkeypatch.setattr(api_app, "METADATA_PATH", metadata_path)
+
+    response = client.get(
+        "/advisory",
+        params={"province": "Nueva Ecija", "crop": "corn", "stage": "vegetative"},
+    )
+
+    assert response.status_code == 200
+    assert (
+        response.json()["refresh_metadata"]["last_refresh_utc"]
+        == "2026-06-20T12:00:00+00:00"
+    )
